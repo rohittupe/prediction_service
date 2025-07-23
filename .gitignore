@@ -1,0 +1,9 @@
+.idea
+.pytest_cache
+test_logs
+test_reports
+__pycache__/
+venv/
+.DS_Store
+.coverage
+htmlcov/

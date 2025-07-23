@@ -1,0 +1,363 @@
+name: Enhanced CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      run_stress_tests:
+        description: 'Run stress tests'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  deploy-app:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r app/requirements.txt
+    
+    - name: Start application
+      run: |
+        cd app
+        uvicorn main:app --host 0.0.0.0 --port 8000 &
+        sleep 5  # Wait for app to start
+    
+    - name: Check application health
+      run: |
+        curl -f http://localhost:8000/ping || exit 1
+        echo "Application is healthy and running"
+    
+    - name: Save application URL
+      run: |
+        echo "APP_URL=http://localhost:8000" >> $GITHUB_ENV
+        echo "::set-output name=app_url::http://localhost:8000"
+      id: app_info
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    needs: deploy-app
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r app/requirements.txt
+        pip install -r requirements-test.txt
+    
+    - name: Start application for tests
+      run: |
+        cd app
+        uvicorn main:app --host 0.0.0.0 --port 8000 &
+        echo "APP_PID=$!" >> $GITHUB_ENV
+        sleep 5
+    
+    - name: Run unit tests
+      run: |
+        pytest tests/unit -v --tb=short -m "unit" \
+          --html=test-reports/unit-tests.html \
+          --self-contained-html \
+          --cov=app \
+          --cov-report=xml:coverage-unit.xml \
+          --cov-report=html:htmlcov-unit \
+          --json-report --json-report-file=test-reports/unit-tests.json
+    
+    - name: Stop application
+      if: always()
+      run: |
+        if [ ! -z "$APP_PID" ]; then
+          kill $APP_PID || true
+        fi
+    
+    - name: Upload unit test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: unit-test-results
+        path: |
+          test-reports/unit-tests.html
+          test-reports/unit-tests.json
+          htmlcov-unit/
+          coverage-unit.xml
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: deploy-app
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r app/requirements.txt
+        pip install -r requirements-test.txt
+    
+    - name: Start application for tests
+      run: |
+        cd app
+        uvicorn main:app --host 0.0.0.0 --port 8000 &
+        echo "APP_PID=$!" >> $GITHUB_ENV
+        sleep 5
+    
+    - name: Run integration tests
+      run: |
+        pytest tests/integration -v --tb=short -m "integration" \
+          --html=test-reports/integration-tests.html \
+          --self-contained-html \
+          --cov=app \
+          --cov-report=xml:coverage-integration.xml \
+          --cov-report=html:htmlcov-integration \
+          --json-report --json-report-file=test-reports/integration-tests.json
+      timeout-minutes: 10
+    
+    - name: Stop application
+      if: always()
+      run: |
+        if [ ! -z "$APP_PID" ]; then
+          kill $APP_PID || true
+        fi
+    
+    - name: Upload integration test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: integration-test-results
+        path: |
+          test-reports/integration-tests.html
+          test-reports/integration-tests.json
+          htmlcov-integration/
+          coverage-integration.xml
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r app/requirements.txt
+        pip install -r requirements-test.txt
+    
+    - name: Start application for tests
+      run: |
+        cd app
+        uvicorn main:app --host 0.0.0.0 --port 8000 &
+        echo "APP_PID=$!" >> $GITHUB_ENV
+        sleep 5
+    
+    - name: Run E2E tests
+      run: |
+        pytest tests/e2e -v --tb=short -m "e2e" \
+          --html=test-reports/e2e-tests.html \
+          --self-contained-html \
+          --cov=app \
+          --cov-report=xml:coverage-e2e.xml \
+          --cov-report=html:htmlcov-e2e \
+          --json-report --json-report-file=test-reports/e2e-tests.json
+      timeout-minutes: 15
+    
+    - name: Stop application
+      if: always()
+      run: |
+        if [ ! -z "$APP_PID" ]; then
+          kill $APP_PID || true
+        fi
+    
+    - name: Upload E2E test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: e2e-test-results
+        path: |
+          test-reports/e2e-tests.html
+          test-reports/e2e-tests.json
+          htmlcov-e2e/
+          coverage-e2e.xml
+
+  stress-tests:
+    runs-on: ubuntu-latest
+    needs: e2e-tests
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.run_stress_tests == 'true' ||
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements*.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r app/requirements.txt
+        pip install -r requirements-test.txt
+    
+    - name: Start application for tests
+      run: |
+        cd app
+        uvicorn main:app --host 0.0.0.0 --port 8000 &
+        echo "APP_PID=$!" >> $GITHUB_ENV
+        sleep 5
+    
+    - name: Run stress tests
+      run: |
+        # Install locust if not already installed
+        pip install locust
+        
+        # Run stress test scenario based on workflow trigger
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          # For manual triggers, run full stress test
+          python -m tests.stress.test_scenarios stress
+        else
+          # For automatic triggers (push to main), run quick smoke test
+          python -m tests.stress.test_scenarios smoke
+        fi
+      timeout-minutes: 20
+      continue-on-error: true
+    
+    - name: Stop application
+      if: always()
+      run: |
+        if [ ! -z "$APP_PID" ]; then
+          kill $APP_PID || true
+        fi
+    
+    - name: Upload stress test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: stress-test-results
+        path: |
+          test-reports/stress-tests.html
+          test-reports/stress-tests.json
+
+  test-summary:
+    runs-on: ubuntu-latest
+    needs: [unit-tests, integration-tests, e2e-tests]
+    if: always()
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Download all test results
+      uses: actions/download-artifact@v3
+      with:
+        path: test-artifacts/
+    
+    - name: Merge coverage reports
+      run: |
+        pip install coverage
+        coverage combine test-artifacts/*/coverage*.xml || true
+        coverage report || true
+        coverage xml -o final-coverage.xml || true
+    
+    - name: Upload final coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./final-coverage.xml
+        flags: alltests
+        name: merged-coverage
+      continue-on-error: true
+    
+    - name: Create test summary
+      run: |
+        echo "## Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Test Suite | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|------------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Unit Tests | ${{ needs.unit-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Integration Tests | ${{ needs.integration-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| E2E Tests | ${{ needs.e2e-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ needs.stress-tests.result }}" != "" ]; then
+          echo "| Stress Tests | ${{ needs.stress-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        fi
+    
+    - name: Upload all test artifacts
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: all-test-results
+        path: test-artifacts/
