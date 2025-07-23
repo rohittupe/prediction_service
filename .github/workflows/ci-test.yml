@@ -5,6 +5,8 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  schedule:
+    - cron: '0 6 * * *'  # Run at 6 AM daily
   workflow_dispatch:
     inputs:
       run_stress_tests:
@@ -314,8 +316,7 @@ jobs:
       with:
         name: stress-test-results
         path: |
-          test-reports/stress-tests.html
-          test-reports/stress-tests.json
+          test-reports/stress_*.html
 
   test-summary:
     runs-on: ubuntu-latest

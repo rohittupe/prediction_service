@@ -1,7 +1,9 @@
 .idea
 .pytest_cache
 test_logs
+test-logs
 test_reports
+test-reports
 __pycache__/
 venv/
 .DS_Store

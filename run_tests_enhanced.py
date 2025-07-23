@@ -16,8 +16,8 @@ class TestRunner:
 
     def __init__(self):
         self.project_root = Path(__file__).parent
-        self.test_reports_dir = self.project_root / "test_reports"
-        self.test_logs_dir = self.project_root / "test_logs"
+        self.test_reports_dir = self.project_root / "test-reports"
+        self.test_logs_dir = self.project_root / "test-logs"
 
         self.test_reports_dir.mkdir(exist_ok=True)
         self.test_logs_dir.mkdir(exist_ok=True)
@@ -81,10 +81,10 @@ class TestRunner:
                 self.project_root / "venv" / "Scripts" / "pytest"),
             "-v",
             "--tb=short",
-            f"--html=test_reports/{test_suite}_{self.timestamp}.html",
+            f"--html=test-reports/{test_suite}_{self.timestamp}.html",
             "--cov=app",
-            "--cov-report=html:test_reports/htmlcov",
-            f"--json-report-file=test_reports/{test_suite}_{self.timestamp}.json",
+            "--cov-report=html:test-reports/htmlcov",
+            f"--json-report-file=test-reports/{test_suite}_{self.timestamp}.json",
             "--json-report-summary",
             "--self-contained-html"
         ]

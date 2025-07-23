@@ -31,7 +31,7 @@ class TestScenario:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         locustfile_path = os.path.join(current_dir, "locustfile.py")
         project_root = os.path.dirname(os.path.dirname(current_dir))
-        report_dir = os.path.join(project_root, "test_reports")
+        report_dir = os.path.join(project_root, "test-reports")
         
         # Ensure report directory exists
         os.makedirs(report_dir, exist_ok=True)

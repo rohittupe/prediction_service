@@ -8,7 +8,7 @@ class TestLogger:
     """Centralized logging utility for tests."""
 
     _loggers = {}
-    _log_dir = Path("test_logs")
+    _log_dir = Path("test-logs")
     _log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     _date_format = "%Y-%m-%d %H:%M:%S"
 
